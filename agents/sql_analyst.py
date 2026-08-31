@@ -179,7 +179,12 @@ def is_safe_sql_edge(state: AgentSchema) -> str:
     else :
         return "canceled_sql"
 
-sql_agent_graph.add_conditional_edges("is_safe_sql", is_safe_sql_edge)
+sql_agent_graph.add_conditional_edges("is_safe_sql", is_safe_sql_edge,
+                                      {
+                                          "execute_sql": "execute_sql",
+                                          "canceled_sql": "canceled_sql"
+                                      })
+
 
 # sql_agent_graph.add_edge("is_safe_sql", "execute_sql")
 # sql_agent_graph.add_edge("is_safe_sql", "canceled_sql")
