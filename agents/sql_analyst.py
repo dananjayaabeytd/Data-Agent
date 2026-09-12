@@ -3,12 +3,28 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from alngchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
-from Models.schema import AgentSchema
+from Models.schema import AgentSchema, JudgeSchema
 from utils.database import DatabaseUtil
 from utils.llm_pick import pick_llm
+
+
+def database_config() -> dict:
+    required = ("host", "port", "user", "password", "database")
+    missing = [name for name in required if not os.getenv(name)]
+    if missing:
+        raise RuntimeError(f"Missing database environment variables: {', '.join(missing)}")
+
+    return {
+        "host": os.environ["host"],
+        "port": int(os.environ["port"]),
+        "user": os.environ["user"],
+        "password": os.environ["password"],
+        "dbname": os.environ["database"],
+    }
+
 
 def curate_ques(state:AgentSchema) -> AgentSchema:
     
@@ -18,22 +34,16 @@ def curate_ques(state:AgentSchema) -> AgentSchema:
 
     response = llm.invoke(f"Curate the folowing question : {user_question}").content
 
-    state.curated_question = response
-    state.messages = state.messages + [HumanMessage(content=f"{response}")]
-
-    return state
+    return {
+        "curated_question": response,
+        "messages": [HumanMessage(content=response)],
+    }
     
 def prompt_query_context(state:AgentSchema) -> AgentSchema:
     
     curated_question = state.curated_question
 
-    conn_details = {
-        "host":os.environ['host'],
-        "port":os.environ['port'],
-        "user":os.environ['user'],
-        "password":os.environ['password'],
-        "database":os.environ['database'],
-    }
+    conn_details = database_config()
 
     obj = DatabaseUtil(conn_details)
 
@@ -58,9 +68,7 @@ def prompt_query_context(state:AgentSchema) -> AgentSchema:
     
     """
 
-    state.prompt_query_context = prompt
-
-    return state
+    return {"prompt_query_context": prompt}
 
 def generate_sql(state: AgentSchema) -> AgentSchema:
 
@@ -70,9 +78,7 @@ def generate_sql(state: AgentSchema) -> AgentSchema:
 
     generated_sql_query = llm.invoke(prompt).content  # Generate the SQL query using the LLM
 
-    state.generated_sql_query = generated_sql_query
-
-    return state
+    return {"generated_sql_query": generated_sql_query}
 
 def is_safe_sql(state: AgentSchema) -> AgentSchema:
 
@@ -92,39 +98,26 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
     {sql_query}"""
 
     response = llm_judge.invoke(prompt).model_dump()  # Get the structured output as a dictionary
-    state.is_safe = response['answer']
-    state.comments = response['comments']
-
-    return state
+    return {"is_safe": response['answer'], "comments": response['comments']}
 
 def canceled_sql(state: AgentSchema) -> AgentSchema:
 
     comments = state.comments
 
-    state.final_answer = f"The generated SQL query was deemed unsafe to execute. The reason provided by the judge is: {comments}. Therefore, the SQL query will not be executed."
-    state.messages = state.messages + [AIMessage(content=f"{state.final_answer}")]  # Append the final answer to the messages list  
-
-    return state
+    final_answer = f"The generated SQL query was deemed unsafe to execute. The reason provided by the judge is: {comments}. Therefore, the SQL query will not be executed."
+    return {"final_answer": final_answer, "messages": [AIMessage(content=final_answer)]}
 
 def execute_sql(state: AgentSchema) -> AgentSchema:
 
     sql_query = state.generated_sql_query
 
-    conn_details = {
-        "host": os.environ['host'],
-        "port": os.environ['port'],
-        "user": os.environ['user'],
-        "password": os.environ['password'],
-        "dbname": os.environ['database']
-    }
+    conn_details = database_config()
 
     obj = DatabaseUtil(conn_details)
 
     execution_result = obj.execute_sql(sql_query)  # Execute the SQL query on the database
 
-    state.sql_query_execution_result = execution_result
-
-    return state
+    return {"sql_query_execution_result": execution_result}
 
 def represent_final_answer(state: AgentSchema) -> AgentSchema:
 
@@ -145,10 +138,10 @@ def represent_final_answer(state: AgentSchema) -> AgentSchema:
 
     llm_response = llm.invoke(prompt).content  # Get the final answer from the LLM
 
-    state.final_answer = llm_response
-    state.messages = state.messages + [AIMessage(content=f"{llm_response}")]  # Append the final answer to the messages list
-
-    return state
+    return {
+        "final_answer": llm_response,
+        "messages": [AIMessage(content=llm_response)],
+    }
 
 #------------ Graph Building ------------
 

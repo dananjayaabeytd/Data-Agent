@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
@@ -21,7 +22,8 @@ DB_CONFIG = {
     "password": os.environ['password'],
 }
 
-CSV_DIR = "data"
+PROJECT_ROOT = Path(__file__).resolve().parent
+CSV_DIR = PROJECT_ROOT / "data"
 
 
 # ============================================================
@@ -243,7 +245,7 @@ cursor.execute("""
 
 def load_csv(table_name, csv_file, columns):
 
-    file_path = os.path.join(CSV_DIR, csv_file)
+    file_path = CSV_DIR / csv_file
 
     if not os.path.exists(file_path):
         raise FileNotFoundError(
@@ -419,22 +421,7 @@ for table in tables:
 
     print(f"{table:<15} {count:>10,}")
 
-
-# ============================================================
-# COMMIT
-# ============================================================
-
 conn.commit()
-
-print("\nData loaded successfully!")
-print("Transaction committed.")
-
-
-# ============================================================
-# CLOSE CONNECTION
-# ============================================================
-
 cursor.close()
 conn.close()
-
-print("PostgreSQL connection closed.")
+print("Database transaction committed")

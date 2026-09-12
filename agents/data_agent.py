@@ -6,7 +6,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from langchain_core.messages import HumanMessage
 from langgraph.graph import START, StateGraph
 
-from agents import sql_analyst
 from agents.etl_analyst import etl_analyst
 from agents.sql_analyst import sql_analyst
 from Models.schema import DataAgentSchema, RouterSchema
@@ -28,9 +27,7 @@ def router_node(state:DataAgentSchema):
 
     route_response = route_response_dict['answer']
 
-    state.route_response = route_response
-
-    return state
+    return {"route_response": route_response}
 
 def etl_node(state:DataAgentSchema):
 
@@ -41,9 +38,8 @@ def etl_node(state:DataAgentSchema):
             {message}
     """)]}
         ) 
-    state.messages = state.messages + [response]
-
-    return state
+    final_message = response["messages"][-1]
+    return {"messages": [final_message]}
 
 def sql_node(state:DataAgentSchema):
 
@@ -52,7 +48,7 @@ def sql_node(state:DataAgentSchema):
     input_schema = {
         "messages": [],
         "user_question": f"{message}",
-        "curated_ques": "",
+        "curated_question": "",
         "prompt_query_context": "",
         "generated_sql_query": "",
         "is_safe": "No",
@@ -63,9 +59,8 @@ def sql_node(state:DataAgentSchema):
 
     response = sql_analyst.invoke(input_schema)
 
-    state.messages = state.messages + [response]
-
-    return state
+    final_message = response["messages"][-1]
+    return {"messages": [final_message]}
 
 
 
@@ -95,20 +90,11 @@ data_agent_graph.add_conditional_edges("router_node", route_edge,
 
 data_agent = data_agent_graph.compile()
 
-# Optional|
-from IPython.display import Image
-
-img = Image(data_agent.get_graph().draw_mermaid_png())
-with open("data_agent_graph.png", "wb") as f:
-    f.write(img.data)
-
-
-
 if __name__ == "__main__":
 
     response = data_agent.invoke(
         {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv folder")],
-         "route_response": ""}
+         "route_response": None}
     )
 
     print(response)

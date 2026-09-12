@@ -10,3 +10,6 @@ wheels/
 .venv
 .env
 *.csv
+!data/*.csv
+data/extract/*.csv
+data/transform/*.csv

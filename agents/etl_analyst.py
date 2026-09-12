@@ -69,15 +69,30 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
 
         """
 
-    response = llm.invoke(prompt).content 
+    response = llm.invoke(prompt).content
 
-    # Optional Cleaning
-    pandas_code = response.strip().strip('```').strip().lstrip('python').strip()
+    pandas_code = response.strip()
+    if pandas_code.startswith("```"):
+        pandas_code = pandas_code.removeprefix("```").removeprefix("python").strip()
+        pandas_code = pandas_code.removesuffix("```").strip()
 
-    # Execute the Pandas code
-    results = etl_tools.execute_code(pandas_code)
+    try:
+        resolved_output = etl_tools._resolve_project_path(output_folder)
+        resolved_output.mkdir(parents=True, exist_ok=True)
+        resolved_input = etl_tools._resolve_project_path(input_file_path)
+    except (ValueError, OSError) as error:
+        return f"Transformation was rejected: {error}"
 
-    return f"The data is transformed and saved at {output_folder} in {output_format} format. \n\n Pandas Code Executed: \n {pandas_code} \n\n Execution Result: \n {results}"
+    results = etl_tools.execute_code(
+        pandas_code,
+        {
+            "input_file_path": str(resolved_input),
+            "output_folder": str(resolved_output),
+            "output_format": output_format,
+        },
+    )
+
+    return f"Transformation requested for {output_folder} in {output_format} format.\n\nExecution Result:\n{results}"
 
 
 # Toolkit 
