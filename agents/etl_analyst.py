@@ -1,7 +1,7 @@
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from langchain.tools import tool
 from langchain_core.messages import HumanMessage, ToolMessage
@@ -11,11 +11,11 @@ from Models.schema import ETLAgentSchema
 from utils.etl_tools import ETLTools
 from utils.llm_pick import pick_llm
 
-#----------------------- AGENT TOOLS ------------------------#
+# ----------------------- AGENT TOOLS ------------------------#
 
 
 @tool
-def extract_load_tool(url:str, output_folder:str, format:str) -> str:
+def extract_load_tool(url: str, output_folder: str, format: str) -> str:
     """
     This tool extracts the data from the API (url) and loads it into the
     the desired location (output_folder).
@@ -24,7 +24,7 @@ def extract_load_tool(url:str, output_folder:str, format:str) -> str:
         url (str): The API endpoint from which to extract data.
         output_folder (str): The folder where the extracted data will be saved.
         format (str): The format in which to save the extracted data (csv, json, parquet).
-    
+
     Returns:
         str: A message indicating the success or failure of the operation.
 
@@ -34,7 +34,9 @@ def extract_load_tool(url:str, output_folder:str, format:str) -> str:
 
 
 @tool
-def transform_load_tool(input_file_path:str,output_folder:str,output_format:str, user_question:str) -> str:
+def transform_load_tool(
+    input_file_path: str, output_folder: str, output_format: str, user_question: str
+) -> str:
     """
     This tool transforms the data from the specified file and loads it into the
     desired location (output_folder).
@@ -43,7 +45,7 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
         input_file_path (str): The path to the file containing the data to be transformed.
         output_folder (str): The folder where the transformed data will be saved.
         output_format (str): The format in which to save the transformed data (csv, json, parquet).
-    
+
     Returns:
         str: A message indicating the success or failure of the operation.
 
@@ -95,7 +97,7 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
     return f"Transformation requested for {output_folder} in {output_format} format.\n\nExecution Result:\n{results}"
 
 
-# Toolkit 
+# Toolkit
 tools = [extract_load_tool, transform_load_tool]
 
 llm = pick_llm("medium")
@@ -104,7 +106,8 @@ llm_bind = llm.bind_tools(tools)
 
 # ---------------------------------------- AGENT GRAPH ---------------------------------------- #
 
-def llm_node(state:ETLAgentSchema):
+
+def llm_node(state: ETLAgentSchema):
 
     messages = state.messages
 
@@ -123,7 +126,7 @@ def llm_node(state:ETLAgentSchema):
     return state
 
 
-def tool_node(state:ETLAgentSchema):
+def tool_node(state: ETLAgentSchema):
     """
     This node is responsible for invoking the appropriate tool based on the user's question and the context provided by the LLM.
     """
@@ -135,15 +138,16 @@ def tool_node(state:ETLAgentSchema):
     tool_calls = state.messages[-1].tool_calls
 
     for tool_call in tool_calls:
+        tool = tools_by_name[tool_call["name"]]
+        observation = tool.invoke(tool_call["args"])
 
-        tool = tools_by_name[tool_call['name']]
-        observation = tool.invoke(tool_call['args'])
-
-        tools_results.append(ToolMessage(content=observation, tool_call_id = tool_call['id']))
+        tools_results.append(
+            ToolMessage(content=observation, tool_call_id=tool_call["id"])
+        )
 
     state.messages = state.messages + tools_results
 
-    return state   
+    return state
 
 
 # Nodes & Edges
@@ -153,7 +157,8 @@ etl_analyst_graph.add_node("tool_node", tool_node)
 
 etl_analyst_graph.add_edge(START, "llm_node")
 
-def is_tool_call(state:ETLAgentSchema):
+
+def is_tool_call(state: ETLAgentSchema):
     tool_calls = state.messages[-1].tool_calls
 
     if tool_calls:
@@ -161,12 +166,9 @@ def is_tool_call(state:ETLAgentSchema):
     else:
         return "end"
 
+
 etl_analyst_graph.add_conditional_edges(
-    "llm_node",is_tool_call,
-    {
-        "tool_node": "tool_node",
-        "end": END
-    }
+    "llm_node", is_tool_call, {"tool_node": "tool_node", "end": END}
 )
 
 etl_analyst_graph.add_edge("tool_node", "llm_node")
@@ -175,24 +177,30 @@ etl_analyst = etl_analyst_graph.compile()
 
 if __name__ == "__main__":
     # Compile the Graph
-    
 
     # Optional
     from IPython.display import Image
+
     img = Image(etl_analyst.get_graph().draw_mermaid_png())
     with open("etl_analyst_graph.png", "wb") as f:
         f.write(img.data)
 
     response = etl_analyst.invoke(
-        {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv folder")]}
+        {
+            "messages": [
+                HumanMessage(
+                    content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv folder"
+                )
+            ]
+        }
     )
 
-#     response = etl_analyst.invoke(
-#          {"messages":[HumanMessage(content=f"""
-#             I want to transform the data stored in the 'c:\\Data_Agent\\data\\extract\\extracted_data.csv' file 
-#             and save the transformed data in the 'c:\\Data_Agent\\data\\transform' folder in the csv format.
-#             The transformation should filter the data to show bulbasaur pokemon only.
-# """)]}
-#     )    
+    #     response = etl_analyst.invoke(
+    #          {"messages":[HumanMessage(content=f"""
+    #             I want to transform the data stored in the 'c:\\Data_Agent\\data\\extract\\extracted_data.csv' file
+    #             and save the transformed data in the 'c:\\Data_Agent\\data\\transform' folder in the csv format.
+    #             The transformation should filter the data to show bulbasaur pokemon only.
+    # """)]}
+    #     )
 
     print(response)

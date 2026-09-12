@@ -7,7 +7,6 @@ import requests
 
 
 class ETLTools:
-
     def __init__(self):
         pass
 
@@ -29,7 +28,7 @@ class ETLTools:
         Args:
             url (str): The API endpoint from which to extract data.
             output_folder (str): The folder where the extracted data will be saved.
-        
+
         Returns:
             str: A message indicating the success or failure of the operation.
 
@@ -62,11 +61,15 @@ class ETLTools:
                 return f"Unsupported format: {format}"
 
             return f"Data successfully extracted and saved to {filename}"
-        except (requests.exceptions.RequestException, ValueError, OSError, TypeError) as e:
+        except (
+            requests.exceptions.RequestException,
+            ValueError,
+            OSError,
+            TypeError,
+        ) as e:
             return f"Failed to extract data: {e}"
 
-
-    def transform_load_context(self, file_path:str):
+    def transform_load_context(self, file_path: str):
         """
         This tool transforms the data from the specified file and loads it into the
         desired location (output_folder).
@@ -98,7 +101,6 @@ class ETLTools:
 
         return top_3_rows
 
-
     def execute_code(self, code: str, context: dict | None = None):
         """
         This tool executes the provided code and returns the output.
@@ -110,12 +112,29 @@ class ETLTools:
         """
 
         forbidden_names = {
-            "__import__", "eval", "exec", "compile", "open", "input",
-            "breakpoint", "globals", "locals", "vars",
+            "__import__",
+            "eval",
+            "exec",
+            "compile",
+            "open",
+            "input",
+            "breakpoint",
+            "globals",
+            "locals",
+            "vars",
         }
         forbidden_attributes = {
-            "system", "popen", "remove", "unlink", "rmdir", "rename",
-            "replace", "walk", "listdir", "read_pickle", "to_pickle",
+            "system",
+            "popen",
+            "remove",
+            "unlink",
+            "rmdir",
+            "rename",
+            "replace",
+            "walk",
+            "listdir",
+            "read_pickle",
+            "to_pickle",
         }
 
         try:
@@ -124,12 +143,22 @@ class ETLTools:
                 if isinstance(node, (ast.Import, ast.ImportFrom)):
                     raise ValueError("Imports are not allowed in generated ETL code")
                 if isinstance(node, ast.Name) and node.id in forbidden_names:
-                    raise ValueError(f"The generated code uses forbidden name: {node.id}")
+                    raise ValueError(
+                        f"The generated code uses forbidden name: {node.id}"
+                    )
                 if isinstance(node, ast.Attribute):
                     if node.attr.startswith("__") or node.attr in forbidden_attributes:
-                        raise ValueError(f"The generated code uses forbidden attribute: {node.attr}")
+                        raise ValueError(
+                            f"The generated code uses forbidden attribute: {node.attr}"
+                        )
 
-            safe_builtins = {"len": len, "range": range, "str": str, "int": int, "float": float}
+            safe_builtins = {
+                "len": len,
+                "range": range,
+                "str": str,
+                "int": int,
+                "float": float,
+            }
             globals_dict = {"__builtins__": safe_builtins, "pd": pd}
             globals_dict.update(context or {})
             exec(compile(tree, "<generated-etl>", "exec"), globals_dict, {})
@@ -142,4 +171,3 @@ if __name__ == "__main__":
     obj = ETLTools()
     path = "C:\\Data_Agent\\data\\extract\\extracted_data.csv"
     print(obj.transform_load_context(path))
-          

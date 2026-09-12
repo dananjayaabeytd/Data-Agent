@@ -13,3 +13,4 @@ wheels/
 !data/*.csv
 data/extract/*.csv
 data/transform/*.csv
+data/sessions.sqlite3*

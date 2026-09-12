@@ -7,19 +7,19 @@ from psycopg2 import sql
 
 load_dotenv()
 
-if 'port' not in os.environ:
-    os.environ['port'] = '5432'
+if "port" not in os.environ:
+    os.environ["port"] = "5432"
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
 DB_CONFIG = {
-    "host": os.environ['host'],
-    "port": int(os.environ['port']),
-    "database": os.environ['database'],
-    "user": os.environ['user'],
-    "password": os.environ['password'],
+    "host": os.environ["host"],
+    "port": int(os.environ["port"]),
+    "database": os.environ["database"],
+    "user": os.environ["user"],
+    "password": os.environ["password"],
 }
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -238,19 +238,17 @@ cursor.execute("""
 """)
 
 
-
 # ============================================================
 # LOAD CSV USING POSTGRES COPY
 # ============================================================
+
 
 def load_csv(table_name, csv_file, columns):
 
     file_path = CSV_DIR / csv_file
 
     if not os.path.exists(file_path):
-        raise FileNotFoundError(
-            f"CSV file not found: {file_path}"
-        )
+        raise FileNotFoundError(f"CSV file not found: {file_path}")
 
     copy_sql = sql.SQL("""
         COPY {} ({})
@@ -263,22 +261,11 @@ def load_csv(table_name, csv_file, columns):
         )
     """).format(
         sql.Identifier("public", table_name),
-        sql.SQL(", ").join(
-            sql.Identifier(column)
-            for column in columns
-        )
+        sql.SQL(", ").join(sql.Identifier(column) for column in columns),
     )
 
-    with open(
-        file_path,
-        "r",
-        encoding="utf-8"
-    ) as file:
-
-        cursor.copy_expert(
-            copy_sql,
-            file
-        )
+    with open(file_path, "r", encoding="utf-8") as file:
+        cursor.copy_expert(copy_sql, file)
 
     print(f"Loaded {csv_file}")
 
@@ -407,13 +394,9 @@ print("\nRecord counts:")
 print("-" * 40)
 
 for table in tables:
-
     cursor.execute(
-        sql.SQL(
-            "SELECT COUNT(*) FROM {}.{}"
-        ).format(
-            sql.Identifier("public"),
-            sql.Identifier(table)
+        sql.SQL("SELECT COUNT(*) FROM {}.{}").format(
+            sql.Identifier("public"), sql.Identifier(table)
         )
     )
 

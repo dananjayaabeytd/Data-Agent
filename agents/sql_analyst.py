@@ -1,7 +1,7 @@
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
@@ -15,7 +15,9 @@ def database_config() -> dict:
     required = ("host", "port", "user", "password", "database")
     missing = [name for name in required if not os.getenv(name)]
     if missing:
-        raise RuntimeError(f"Missing database environment variables: {', '.join(missing)}")
+        raise RuntimeError(
+            f"Missing database environment variables: {', '.join(missing)}"
+        )
 
     return {
         "host": os.environ["host"],
@@ -26,8 +28,8 @@ def database_config() -> dict:
     }
 
 
-def curate_ques(state:AgentSchema) -> AgentSchema:
-    
+def curate_ques(state: AgentSchema) -> AgentSchema:
+
     user_question = state.user_question
 
     llm = pick_llm("low")
@@ -38,9 +40,10 @@ def curate_ques(state:AgentSchema) -> AgentSchema:
         "curated_question": response,
         "messages": [HumanMessage(content=response)],
     }
-    
-def prompt_query_context(state:AgentSchema) -> AgentSchema:
-    
+
+
+def prompt_query_context(state: AgentSchema) -> AgentSchema:
+
     curated_question = state.curated_question
 
     conn_details = database_config()
@@ -70,21 +73,27 @@ def prompt_query_context(state:AgentSchema) -> AgentSchema:
 
     return {"prompt_query_context": prompt}
 
+
 def generate_sql(state: AgentSchema) -> AgentSchema:
 
     prompt = state.prompt_query_context
 
-    llm = pick_llm("medium")  # Pick the appropriate LLM based on the level of the question
+    llm = pick_llm(
+        "medium"
+    )  # Pick the appropriate LLM based on the level of the question
 
-    generated_sql_query = llm.invoke(prompt).content  # Generate the SQL query using the LLM
+    generated_sql_query = llm.invoke(
+        prompt
+    ).content  # Generate the SQL query using the LLM
 
     return {"generated_sql_query": generated_sql_query}
+
 
 def is_safe_sql(state: AgentSchema) -> AgentSchema:
 
     sql_query = state.generated_sql_query
 
-    llm = pick_llm("medium")  
+    llm = pick_llm("medium")
     llm_judge = llm.with_structured_output(JudgeSchema)
 
     prompt = f"""
@@ -97,8 +106,11 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
     Here's the SQL query to evaluate:
     {sql_query}"""
 
-    response = llm_judge.invoke(prompt).model_dump()  # Get the structured output as a dictionary
-    return {"is_safe": response['answer'], "comments": response['comments']}
+    response = llm_judge.invoke(
+        prompt
+    ).model_dump()  # Get the structured output as a dictionary
+    return {"is_safe": response["answer"], "comments": response["comments"]}
+
 
 def canceled_sql(state: AgentSchema) -> AgentSchema:
 
@@ -106,6 +118,7 @@ def canceled_sql(state: AgentSchema) -> AgentSchema:
 
     final_answer = f"The generated SQL query was deemed unsafe to execute. The reason provided by the judge is: {comments}. Therefore, the SQL query will not be executed."
     return {"final_answer": final_answer, "messages": [AIMessage(content=final_answer)]}
+
 
 def execute_sql(state: AgentSchema) -> AgentSchema:
 
@@ -115,9 +128,12 @@ def execute_sql(state: AgentSchema) -> AgentSchema:
 
     obj = DatabaseUtil(conn_details)
 
-    execution_result = obj.execute_sql(sql_query)  # Execute the SQL query on the database
+    execution_result = obj.execute_sql(
+        sql_query
+    )  # Execute the SQL query on the database
 
     return {"sql_query_execution_result": execution_result}
+
 
 def represent_final_answer(state: AgentSchema) -> AgentSchema:
 
@@ -143,24 +159,26 @@ def represent_final_answer(state: AgentSchema) -> AgentSchema:
         "messages": [AIMessage(content=llm_response)],
     }
 
-#------------ Graph Building ------------
+
+# ------------ Graph Building ------------
 
 sql_agent_graph = StateGraph(AgentSchema)
 
 # Nodes
-sql_agent_graph.add_node(curate_ques,name="curate_ques")
-sql_agent_graph.add_node(prompt_query_context,name="prompt_query_context")
-sql_agent_graph.add_node(generate_sql,name="generate_sql")
-sql_agent_graph.add_node(is_safe_sql,name="is_safe_sql")
-sql_agent_graph.add_node(canceled_sql,name="canceled_sql")
-sql_agent_graph.add_node(execute_sql,name="execute_sql")
-sql_agent_graph.add_node(represent_final_answer,name="represent_final_answer")
+sql_agent_graph.add_node(curate_ques, name="curate_ques")
+sql_agent_graph.add_node(prompt_query_context, name="prompt_query_context")
+sql_agent_graph.add_node(generate_sql, name="generate_sql")
+sql_agent_graph.add_node(is_safe_sql, name="is_safe_sql")
+sql_agent_graph.add_node(canceled_sql, name="canceled_sql")
+sql_agent_graph.add_node(execute_sql, name="execute_sql")
+sql_agent_graph.add_node(represent_final_answer, name="represent_final_answer")
 
 # Edges
 sql_agent_graph.add_edge(START, "curate_ques")
 sql_agent_graph.add_edge("curate_ques", "prompt_query_context")
 sql_agent_graph.add_edge("prompt_query_context", "generate_sql")
 sql_agent_graph.add_edge("generate_sql", "is_safe_sql")
+
 
 # Codintional Edge Function
 def is_safe_sql_edge(state: AgentSchema) -> str:
@@ -169,14 +187,15 @@ def is_safe_sql_edge(state: AgentSchema) -> str:
     if is_safe.lower() == "yes":
         return "execute_sql"
 
-    else :
+    else:
         return "canceled_sql"
 
-sql_agent_graph.add_conditional_edges("is_safe_sql", is_safe_sql_edge,
-                                      {
-                                          "execute_sql": "execute_sql",
-                                          "canceled_sql": "canceled_sql"
-                                      })
+
+sql_agent_graph.add_conditional_edges(
+    "is_safe_sql",
+    is_safe_sql_edge,
+    {"execute_sql": "execute_sql", "canceled_sql": "canceled_sql"},
+)
 
 
 # sql_agent_graph.add_edge("is_safe_sql", "execute_sql")
@@ -190,10 +209,9 @@ sql_agent_graph.add_edge("represent_final_answer", END)
 sql_analyst = sql_agent_graph.compile()
 
 if __name__ == "__main__":
-
-
     # Optional
     from IPython.display import Image
+
     img = Image(sql_analyst.get_graph().draw_mermaid_png())
     with open("sql_analyst_graph.png", "wb") as f:
         f.write(img.data)
@@ -207,20 +225,26 @@ if __name__ == "__main__":
         "is_safe": "No",
         "comments": "",
         "sql_query_execution_result": "",
-        "final_answer": ""
+        "final_answer": "",
     }
 
     # Execute the Graph
     sql_analyst_response = sql_analyst.invoke(input_schema)
-    print(sql_analyst_response['messages'])  # Print the final output of the graph execution
+    print(
+        sql_analyst_response["messages"]
+    )  # Print the final output of the graph execution
     print("********************************")
 
-    print(sql_analyst_response['generated_sql_query'])  # Print the generated SQL query
+    print(sql_analyst_response["generated_sql_query"])  # Print the generated SQL query
 
     print("********************************")
 
-    print(sql_analyst_response['sql_query_execution_result'])  # Print the result of executing the SQL query
+    print(
+        sql_analyst_response["sql_query_execution_result"]
+    )  # Print the result of executing the SQL query
 
     print("********************************")
 
-    print(sql_analyst_response['prompt_query_context'])  # Print the prompt query context
+    print(
+        sql_analyst_response["prompt_query_context"]
+    )  # Print the prompt query context
