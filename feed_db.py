@@ -1,3 +1,5 @@
+import argparse
+import atexit
 import os
 from pathlib import Path
 
@@ -6,6 +8,14 @@ from dotenv import load_dotenv
 from psycopg2 import sql
 
 load_dotenv()
+
+parser = argparse.ArgumentParser(description="Create and load the Data Agent database")
+parser.add_argument(
+    "--reset",
+    action="store_true",
+    help="Truncate existing application data before loading CSV files",
+)
+args = parser.parse_args()
 
 if "port" not in os.environ:
     os.environ["port"] = "5432"
@@ -34,6 +44,17 @@ conn = psycopg2.connect(**DB_CONFIG)
 conn.autocommit = False
 
 cursor = conn.cursor()
+
+
+def close_connection() -> None:
+    if not conn.closed:
+        if conn.status != psycopg2.extensions.STATUS_READY:
+            conn.rollback()
+        cursor.close()
+        conn.close()
+
+
+atexit.register(close_connection)
 
 print("Connected to PostgreSQL")
 
@@ -218,6 +239,13 @@ cursor.execute(create_tables_sql)
 
 print("Tables created successfully")
 
+cursor.execute("SELECT COUNT(*) FROM public.users")
+existing_users = cursor.fetchone()[0]
+if existing_users and not args.reset:
+    raise RuntimeError(
+        "Database already contains users. Use --reset only for an intentional full reload."
+    )
+
 
 # ============================================================
 # OPTIONAL: CLEAR EXISTING DATA
@@ -227,15 +255,19 @@ print("Tables created successfully")
 # to completely reload the CSV data.
 
 
-cursor.execute("""
-    TRUNCATE TABLE
-        public.ratings,
-        public.payments,
-        public.rides,
-        public.vehicles,
-        public.users
-    CASCADE;
-""")
+if args.reset:
+    cursor.execute("""
+        TRUNCATE TABLE
+            public.ratings,
+            public.payments,
+            public.rides,
+            public.vehicles,
+            public.users
+        CASCADE;
+    """)
+    print("Existing data truncated because --reset was supplied")
+else:
+    print("Existing data was preserved; use --reset only for an intentional reload")
 
 
 # ============================================================

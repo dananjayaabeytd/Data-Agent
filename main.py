@@ -60,7 +60,10 @@ def build_request(session: Session, question: str) -> str:
 
 
 def ask_question(
-    store: SessionStore, session: Session, question: str
+    store: SessionStore,
+    session: Session,
+    question: str,
+    owner_id: str = "local",
 ) -> tuple[Session, str]:
     request = build_request(session, question)
     response = data_agent.invoke(
@@ -70,8 +73,8 @@ def ask_question(
         }
     )
     answer = answer_text(response)
-    store.append(session.session_id, "user", question)
-    session = store.append(session.session_id, "assistant", answer)
+    store.append(session.session_id, "user", question, owner_id)
+    session = store.append(session.session_id, "assistant", answer, owner_id)
     return session, answer
 
 

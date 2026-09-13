@@ -22,8 +22,8 @@ def database_config() -> dict:
     return {
         "host": os.environ["host"],
         "port": int(os.environ["port"]),
-        "user": os.environ["user"],
-        "password": os.environ["password"],
+        "user": os.getenv("db_readonly_user", os.environ["user"]),
+        "password": os.getenv("db_readonly_password", os.environ["password"]),
         "dbname": os.environ["database"],
     }
 

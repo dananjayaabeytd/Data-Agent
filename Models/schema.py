@@ -54,6 +54,25 @@ class ETLAgentSchema(BaseModel):
     )
 
 
+class TransformationStep(BaseModel):
+    operation: Literal[
+        "filter_equals",
+        "filter_contains",
+        "select_columns",
+        "sort",
+        "limit",
+    ]
+    column: str | None = None
+    value: str | int | float | bool | None = None
+    columns: list[str] = Field(default_factory=list)
+    ascending: bool = True
+    limit: int | None = Field(default=None, ge=1, le=100000)
+
+
+class TransformationPlan(BaseModel):
+    steps: list[TransformationStep] = Field(default_factory=list, max_length=10)
+
+
 class RouterSchema(BaseModel):
     answer: Literal["sql", "etl"] = Field(
         ...,
