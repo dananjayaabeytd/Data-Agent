@@ -136,6 +136,13 @@ class ApiAppTests(unittest.TestCase):
             )
             with self.assertRaises(HTTPException):
                 api_app.current_user(x_user_id=None, authorization="Bearer invalid")
+            never_expires = jwt.encode(
+                {"sub": "jwt-user", "iss": api_app.JWT_ISSUER, "aud": api_app.JWT_AUDIENCE},
+                api_app.JWT_SECRET,
+                algorithm="HS256",
+            )
+            with self.assertRaises(HTTPException):
+                api_app.current_user(x_user_id=None, authorization=f"Bearer {never_expires}")
         finally:
             api_app.APP_ENV = original_environment
             api_app.JWT_SECRET = original_secret

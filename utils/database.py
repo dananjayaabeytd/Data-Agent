@@ -82,23 +82,40 @@ class DatabaseUtil:
             query = query.removesuffix("```").strip()
         return query
 
-    def execute_sql(self, query: str) -> str:
-        query = self._clean_query(query)
+    @classmethod
+    def validate_read_only(cls, query: str) -> str:
+        """Return the cleaned query, or raise ValueError if it is not a single read-only statement."""
+        query = cls._clean_query(query)
         if not query or not READ_ONLY_PREFIX.match(query):
-            return "Rejected: only read-only SQL statements are allowed."
+            raise ValueError("only read-only SQL statements are allowed.")
         if ";" in query.rstrip(";"):
-            return "Rejected: multiple SQL statements are not allowed."
+            raise ValueError("multiple SQL statements are not allowed.")
+        return query
 
+    def run_query(self, query: str) -> tuple[list[str], list[tuple]] | None:
+        """Run a validated read-only query and return (columns, rows), or None for no result set.
+
+        Raises ValueError when the query is rejected and psycopg2.Error when it fails.
+        """
+        query = self.validate_read_only(query)
+        with self._connect() as connection:
+            connection.set_session(readonly=True)
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                if cursor.description is None:
+                    return None
+                columns = [column.name for column in cursor.description]
+                return columns, cursor.fetchmany(self.max_rows)
+
+    def execute_sql(self, query: str) -> str:
         try:
-            with self._connect() as connection:
-                connection.set_session(readonly=True)
-                with connection.cursor() as cursor:
-                    cursor.execute(query)
-                    if cursor.description is None:
-                        return "Statement produced no tabular result."
-                    columns = [column.name for column in cursor.description]
-                    rows = cursor.fetchmany(self.max_rows)
-                    return f"Columns: {columns}\nRows: {rows}"
+            result = self.run_query(query)
+        except ValueError as error:
+            return f"Rejected: {error}"
         except psycopg2.Error as error:
             LOGGER.exception("SQL execution failed")
             return f"Error executing query: {error}"
+        if result is None:
+            return "Statement produced no tabular result."
+        columns, rows = result
+        return f"Columns: {columns}\nRows: {rows}"

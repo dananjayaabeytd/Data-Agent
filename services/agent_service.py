@@ -1,9 +1,11 @@
 from collections.abc import Sequence
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 
 from agents.data_agent import data_agent
 from utils.session_store import Session
+from utils.tracing import agent_run_config
 
 MAX_CONTEXT_MESSAGES = 10
 
@@ -32,6 +34,17 @@ def build_request(session: Session, question: str) -> str:
     )
 
 
+def run_agent(request: str, config: RunnableConfig | None = None) -> dict:
+    """Run the data agent on one request and return its final state."""
+    return data_agent.invoke(
+        {
+            "messages": [HumanMessage(content=request)],
+            "route_response": None,
+        },
+        config=config,
+    )
+
+
 def ask_question(
     store,
     session: Session,
@@ -39,11 +52,9 @@ def ask_question(
     owner_id: str = "local",
 ) -> tuple[Session, str]:
     request = build_request(session, question)
-    response = data_agent.invoke(
-        {
-            "messages": [HumanMessage(content=request)],
-            "route_response": None,
-        }
+    response = run_agent(
+        request,
+        agent_run_config(session_id=session.session_id, user_id=owner_id),
     )
     answer = answer_text(response)
     store.append(session.session_id, "user", question, owner_id)

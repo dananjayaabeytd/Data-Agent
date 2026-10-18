@@ -1,3 +1,4 @@
+import logging
 import os
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -7,8 +8,15 @@ from Models.schema import AgentSchema, JudgeSchema
 from utils.database import DatabaseUtil
 from utils.llm_pick import pick_llm
 
+LOGGER = logging.getLogger(__name__)
+
 
 def database_config() -> dict:
+    """Connection settings for the SQL agent, which must use the read-only analytics role.
+
+    A read-only transaction blocks writes but not reads, so connecting as the owner role would
+    let generated SQL read agent_sessions (every user's chats) or call pg_read_file.
+    """
     required = ("host", "port", "user", "password", "database")
     missing = [name for name in required if not os.getenv(name)]
     if missing:
@@ -16,11 +24,24 @@ def database_config() -> dict:
             f"Missing database environment variables: {', '.join(missing)}"
         )
 
+    readonly_user = os.getenv("db_readonly_user")
+    if not readonly_user or readonly_user == os.environ["user"]:
+        message = (
+            "The SQL agent is using the database owner role. Set db_readonly_user and "
+            "db_readonly_password to a separate role (created automatically at startup)."
+        )
+        if os.getenv("APP_ENV", "development").lower() == "production":
+            raise RuntimeError(message)
+        LOGGER.warning(message)
+        readonly_user, readonly_password = os.environ["user"], os.environ["password"]
+    else:
+        readonly_password = os.getenv("db_readonly_password", "")
+
     return {
         "host": os.environ["host"],
         "port": int(os.environ["port"]),
-        "user": os.getenv("db_readonly_user", os.environ["user"]),
-        "password": os.getenv("db_readonly_password", os.environ["password"]),
+        "user": readonly_user,
+        "password": readonly_password,
         "dbname": os.environ["database"],
     }
 
@@ -71,7 +92,19 @@ def prompt_query_context(state: AgentSchema) -> AgentSchema:
     with the user's original query and the schema details of the database, including
     table names, column names, data types, and sample data for each table so that 
     you can understand the structure of the database and generate an accurate SQL query.
-    Unless user explicitly asks for specific number of rows, always limit the output to 10 rows.
+
+    Rules:
+    - Row limits: if the question names a number ("top 5", "3 cities", "first five"),
+      use exactly that LIMIT. If it asks for one extreme ("the highest", "which X has the
+      most"), return a single row with MAX/MIN or LIMIT 1. A single aggregate over the
+      whole question (COUNT, SUM, AVG, MAX) needs no LIMIT. Use LIMIT 10 only for
+      open-ended lists that would otherwise return many rows.
+    - Use only the tables the question needs. Do not join another table unless the
+      question requires one of its columns: extra joins change counts and totals.
+    - Filter on the column the question names (for example "requested" means
+      requested_at, a ride's "fare" is rides.fare, payment amounts are payments.amount).
+    - When grouping (per month, per city), include the grouping column in the SELECT.
+
     Note - Just generate the SQL query without any explanation or additional text because
     this query will be executed directly on the database. So, the output should be SQL
     ready to be executed without any modifications.  

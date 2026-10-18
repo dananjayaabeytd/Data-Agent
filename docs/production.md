@@ -19,7 +19,10 @@ Migrations must be idempotent because every replica runs them on boot. Seed load
 (`DB_SEED_ON_STARTUP`) defaults to `false` in production and only loads into empty tables.
 Add a new numbered file in `db/migrations/` for future schema changes.
 The analytics role must have `CONNECT`, schema `USAGE`, and `SELECT` on business tables only.
-It must not access `agent_sessions` or perform writes.
+It must not access `agent_sessions` or perform writes. In production the API refuses to start if
+`db_readonly_user` is missing or equal to `user`. Set `DB_MANAGE_READONLY_ROLE=true` to let startup
+create the role and apply exactly these grants (`db/bootstrap.py`), or create it yourself when the
+application user cannot run `CREATE ROLE`.
 
 ## Deployment
 

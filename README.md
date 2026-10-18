@@ -76,3 +76,40 @@ The SQL workflow uses a read-only database transaction. ETL paths must remain in
 
 - Backend: `.venv\Scripts\python.exe -m unittest discover -s tests -v`
 - Frontend: `cd frontend && npm run lint && npm run build`
+
+### Models
+
+Every step uses `gpt-5-nano` (OpenAI's cheapest model) with `reasoning_effort=minimal`, about
+$0.0002 per question across the five LLM calls. Set `LLM_MODEL` to change all steps, or
+`LLM_MODEL_LOW` / `LLM_MODEL_MEDIUM` / `LLM_MODEL_HIGH` to upgrade one tier. `medium` covers routing,
+SQL generation, and the safety judge, so it has the most effect on accuracy. Run the evaluation
+after any model change.
+
+### Tracing (Langfuse)
+
+Set `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL` in `.env` and restart the API.
+Every chat request becomes one Langfuse trace containing the router, each SQL or ETL step, every
+LLM call with tokens and cost, and tool calls. Traces are grouped by `session_id` and tagged with
+the user id and environment (`APP_ENV`). Tracing is disabled when the keys are empty; use
+`LANGFUSE_SAMPLE_RATE` to trace a fraction of requests.
+
+Traces include user questions, generated SQL, and query results. Review what may be sent to
+Langfuse Cloud before enabling it on production data.
+
+### Evaluation
+
+`evals/golden_set.json` holds 35 cases: 25 SQL questions (including follow-ups that need history),
+4 destructive requests, and 6 routing checks. Each SQL case has a reference query, and the agent is
+scored by **execution accuracy**: its SQL must return the same rows as the reference (extra columns
+and 2-decimal rounding are allowed; order matters only for rankings). Reference results are computed
+at run time, so they stay correct if the seed data changes.
+
+```
+$env:RUN_AGENT_EVALS = "1"; .venv\Scripts\python.exe -m unittest tests.test_agent_eval -v
+```
+
+The run fails if routing accuracy drops below `EVAL_MIN_ROUTE` (0.9), execution accuracy below
+`EVAL_MIN_EXECUTION` (0.8), any destructive request is not blocked, or business table row counts
+change. With Langfuse keys set, the golden set is synced to the `data-agent-golden` dataset and each
+run is recorded as an experiment you can compare across prompt or model changes. The **Agent
+evaluation** GitHub workflow runs the same check on demand against a fresh seeded database.

@@ -1,4 +1,5 @@
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 from agents.etl_analyst import etl_analyst
@@ -42,17 +43,16 @@ You can help with two kinds of work:
 """
 
 
+def classify(message: str, config: RunnableConfig | None = None) -> str:
+    """Return the route ("sql", "etl", or "chat") for a user message."""
+    return llm_router.invoke(ROUTER_PROMPT.format(message=message), config=config).answer
+
+
 def router_node(state: DataAgentSchema):
 
     message = state.messages[-1].content
 
-    route_response_dict = llm_router.invoke(
-        ROUTER_PROMPT.format(message=message)
-    ).model_dump()
-
-    route_response = route_response_dict["answer"]
-
-    return {"route_response": route_response}
+    return {"route_response": classify(message)}
 
 
 def etl_node(state: DataAgentSchema):
@@ -93,7 +93,11 @@ def sql_node(state: DataAgentSchema):
     response = sql_analyst.invoke(input_schema)
 
     final_message = response["messages"][-1]
-    return {"messages": [final_message]}
+    return {
+        "messages": [final_message],
+        "sql_query": response["generated_sql_query"],
+        "sql_is_safe": response["is_safe"],
+    }
 
 
 def chat_node(state: DataAgentSchema):

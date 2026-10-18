@@ -7,6 +7,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # LLM clients are created at import time; unit tests never call the API.
+      OPENAI_API_KEY: sk-ci-placeholder-not-used
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

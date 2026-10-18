@@ -1,0 +1,46 @@
+name: Agent evaluation
+
+# Runs the golden-set evaluation against a fresh seeded database.
+# It calls OpenAI, so it only runs on demand. Results appear in Langfuse as a dataset experiment.
+on:
+  workflow_dispatch:
+    inputs:
+      run_name:
+        description: Experiment run name shown in Langfuse
+        required: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      RUN_AGENT_EVALS: "1"
+      EVAL_RUN_NAME: ${{ inputs.run_name }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
+      host: localhost
+      port: "5432"
+      database: postgres
+      user: postgres
+      password: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: latest
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - run: uv run python -m unittest tests.test_agent_eval -v

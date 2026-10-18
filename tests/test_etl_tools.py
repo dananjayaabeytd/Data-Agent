@@ -11,19 +11,34 @@ from utils.etl_tools import ETLTools
 from utils.session_store import SessionStore
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+FIXTURE_DIR = PROJECT_ROOT / "data" / "transform" / "_test_fixture"
+FIXTURE_CSV = "data/transform/_test_fixture/input.csv"
+
+
 class ETLToolsTests(unittest.TestCase):
     def setUp(self):
         self.tools = ETLTools()
+        # ETL paths must stay inside the project, so the fixture lives under data/.
+        FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
+        (FIXTURE_DIR / "input.csv").write_text(
+            "name,url\nbulbasaur,https://pokeapi.co/api/v2/pokemon/1/\n"
+            "ivysaur,https://pokeapi.co/api/v2/pokemon/2/\n",
+            encoding="utf-8",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(FIXTURE_DIR, ignore_errors=True)
 
     def test_reads_local_extract_context(self):
-        context = self.tools.transform_load_context("data/extract/extracted_data.csv")
+        context = self.tools.transform_load_context(FIXTURE_CSV)
         self.assertIn("bulbasaur", context)
 
     def test_applies_allowlisted_transformation_plan(self):
-        output_folder = Path("data/transform/_test_plan")
+        output_folder = PROJECT_ROOT / "data" / "transform" / "_test_plan"
         try:
             result = self.tools.apply_transformation_plan(
-                "data/extract/extracted_data.csv",
+                FIXTURE_CSV,
                 str(output_folder),
                 "csv",
                 TransformationPlan(

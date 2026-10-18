@@ -21,6 +21,7 @@ from db.bootstrap import bootstrap_database
 from services.agent_service import ask_question
 from utils.database import DatabaseUtil
 from utils.session_store import create_session_store
+from utils.tracing import flush_tracing, tracing_enabled
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 logging.basicConfig(
@@ -43,8 +44,11 @@ store = None  # created at startup, after migrations have run
 async def lifespan(_app: FastAPI):
     global store
     bootstrap_database()
+    database_config()  # fail fast in production if the SQL agent would use the owner role
     store = create_session_store()
+    LOGGER.info("Langfuse tracing %s", "enabled" if tracing_enabled() else "disabled")
     yield
+    flush_tracing()
 
 
 app = FastAPI(
@@ -127,6 +131,8 @@ def current_user(
                 algorithms=["HS256"],
                 issuer=JWT_ISSUER,
                 audience=JWT_AUDIENCE,
+                # PyJWT only checks exp when present; require it so tokens cannot live forever.
+                options={"require": ["exp", "sub", "iss", "aud"]},
             )
             user_id = claims.get("sub")
         except InvalidTokenError:
