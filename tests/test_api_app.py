@@ -55,6 +55,63 @@ class ApiAppTests(unittest.TestCase):
                 api_app.store = original_store
                 api_app.API_KEY = original_api_key
 
+    def test_session_management_is_owner_scoped(self):
+        original_store = api_app.store
+        original_api_key = api_app.API_KEY
+        with TemporaryDirectory() as directory:
+            store = SessionStore(Path(directory) / "sessions.sqlite3")
+            api_app.store = store
+            api_app.API_KEY = "test-secret"
+            client = TestClient(api_app.app)
+            headers_a = {"X-API-Key": "test-secret", "X-User-ID": "user-a"}
+            headers_b = {"X-API-Key": "test-secret", "X-User-ID": "user-b"}
+            try:
+                ids_a = [
+                    client.post("/api/v1/sessions", headers=headers_a, json={"title": f"A{i}"}).json()["session_id"]
+                    for i in range(4)
+                ]
+                id_b = client.post("/api/v1/sessions", headers=headers_b, json={"title": "B"}).json()["session_id"]
+                store.append(ids_a[0], "user", "hello", "user-a")
+
+                renamed = client.patch(f"/api/v1/sessions/{ids_a[0]}", headers=headers_a, json={"title": "  Renamed  "})
+                self.assertEqual(renamed.status_code, 200)
+                self.assertEqual(renamed.json()["title"], "Renamed")
+                self.assertEqual(
+                    client.patch(f"/api/v1/sessions/{ids_a[0]}", headers=headers_a, json={"title": "   "}).status_code,
+                    400,
+                )
+                self.assertEqual(
+                    client.patch(f"/api/v1/sessions/{ids_a[0]}", headers=headers_b, json={"title": "x"}).status_code,
+                    404,
+                )
+
+                self.assertEqual(
+                    client.delete(f"/api/v1/sessions/{ids_a[0]}/messages", headers=headers_b).status_code,
+                    404,
+                )
+                cleared = client.delete(f"/api/v1/sessions/{ids_a[0]}/messages", headers=headers_a)
+                self.assertEqual(cleared.json()["messages"], [])
+                self.assertEqual(cleared.json()["title"], "Renamed")
+
+                # User B's id in A's bulk request must not be deleted.
+                bulk = client.post(
+                    "/api/v1/sessions/bulk-delete",
+                    headers=headers_a,
+                    json={"session_ids": [ids_a[1], ids_a[2], id_b]},
+                )
+                self.assertEqual(bulk.json(), {"deleted": 2})
+                self.assertEqual(
+                    client.post("/api/v1/sessions/bulk-delete", headers=headers_a, json={"session_ids": []}).status_code,
+                    422,
+                )
+
+                self.assertEqual(client.delete("/api/v1/sessions", headers=headers_a).json(), {"deleted": 2})
+                self.assertEqual(client.get("/api/v1/sessions", headers=headers_a).json(), [])
+                self.assertEqual(len(client.get("/api/v1/sessions", headers=headers_b).json()), 1)
+            finally:
+                api_app.store = original_store
+                api_app.API_KEY = original_api_key
+
     def test_production_jwt_identity(self):
         original_environment = api_app.APP_ENV
         original_secret = api_app.JWT_SECRET

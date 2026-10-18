@@ -73,7 +73,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-User-ID"],
 )
 
@@ -98,6 +98,14 @@ async def request_logging(request, call_next):
 
 class SessionCreateRequest(BaseModel):
     title: str = Field(default="New session", min_length=1, max_length=120)
+
+
+class SessionUpdateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+
+class BulkDeleteRequest(BaseModel):
+    session_ids: list[str] = Field(min_length=1, max_length=500)
 
 
 class MessageRequest(BaseModel):
@@ -222,9 +230,41 @@ def send_message(
         agent_slots.release()
 
 
+@app.patch("/api/v1/sessions/{session_id}", tags=["sessions"])
+def rename_session(
+    session_id: str,
+    request: SessionUpdateRequest,
+    user_id: str = Depends(current_user),
+) -> dict:
+    try:
+        return session_payload(store.rename(session_id, request.title, user_id))
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
+
+
+@app.delete("/api/v1/sessions/{session_id}/messages", tags=["sessions"])
+def clear_session(session_id: str, user_id: str = Depends(current_user)) -> dict:
+    try:
+        return session_payload(store.clear(session_id, user_id))
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+
 @app.delete("/api/v1/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["sessions"])
 def delete_session(session_id: str, user_id: str = Depends(current_user)) -> None:
     try:
         store.delete(session_id, user_id)
     except KeyError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+
+@app.post("/api/v1/sessions/bulk-delete", tags=["sessions"])
+def delete_sessions(request: BulkDeleteRequest, user_id: str = Depends(current_user)) -> dict:
+    return {"deleted": store.delete_many(request.session_ids, user_id)}
+
+
+@app.delete("/api/v1/sessions", tags=["sessions"])
+def delete_all_sessions(user_id: str = Depends(current_user)) -> dict:
+    return {"deleted": store.delete_all(user_id)}

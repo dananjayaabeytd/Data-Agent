@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 import uuid
+from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -143,6 +144,32 @@ class SessionStore:
             )
         return self.get(session_id, owner_id)
 
+    def rename(self, session_id: str, title: str, owner_id: str = "local") -> Session:
+        title = title.strip()
+        if not title:
+            raise ValueError("Session title cannot be empty")
+        with self._transaction() as connection:
+            cursor = connection.execute(
+                "UPDATE sessions SET title = ? WHERE session_id = ? AND owner_id = ?",
+                (title, session_id, owner_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(f"Session not found: {session_id}")
+        return self.get(session_id, owner_id)
+
+    def clear(self, session_id: str, owner_id: str = "local") -> Session:
+        with self._transaction() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE sessions SET updated_at = ?, messages_json = '[]'
+                WHERE session_id = ? AND owner_id = ?
+                """,
+                (self._now(), session_id, owner_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(f"Session not found: {session_id}")
+        return self.get(session_id, owner_id)
+
     def delete(self, session_id: str, owner_id: str = "local") -> None:
         with self._transaction() as connection:
             cursor = connection.execute(
@@ -151,6 +178,24 @@ class SessionStore:
             )
             if cursor.rowcount == 0:
                 raise KeyError(f"Session not found: {session_id}")
+
+    def delete_many(self, session_ids: Sequence[str], owner_id: str = "local") -> int:
+        if not session_ids:
+            return 0
+        placeholders = ", ".join("?" for _ in session_ids)
+        with self._transaction() as connection:
+            cursor = connection.execute(
+                f"DELETE FROM sessions WHERE owner_id = ? AND session_id IN ({placeholders})",
+                (owner_id, *session_ids),
+            )
+            return cursor.rowcount
+
+    def delete_all(self, owner_id: str = "local") -> int:
+        with self._transaction() as connection:
+            cursor = connection.execute(
+                "DELETE FROM sessions WHERE owner_id = ?", (owner_id,)
+            )
+            return cursor.rowcount
 
 
 def create_session_store():

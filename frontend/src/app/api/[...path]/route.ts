@@ -18,7 +18,7 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/[...path]">
   if (process.env.DATA_AGENT_API_KEY) headers.set("X-API-Key", process.env.DATA_AGENT_API_KEY);
   if (process.env.DATA_AGENT_USER_ID) headers.set("X-User-ID", process.env.DATA_AGENT_USER_ID);
 
-  const hasBody = request.method === "POST";
+  const hasBody = request.method === "POST" || request.method === "PATCH";
   try {
     const response = await fetch(`${BACKEND_URL}/api/v1/${target}`, {
       method: request.method,
@@ -40,4 +40,4 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/[...path]">
   }
 }
 
-export { forward as GET, forward as POST, forward as DELETE };
+export { forward as GET, forward as POST, forward as PATCH, forward as DELETE };

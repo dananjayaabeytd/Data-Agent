@@ -1,9 +1,11 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-export default function Markdown({ text }: { text: string }) {
+import { cn } from "@/lib/utils";
+
+export default function Markdown({ text, className }: { text: string; className?: string }) {
   return (
-    <div className="markdown">
+    <div className={cn("prose-oops text-sm leading-relaxed", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -11,11 +13,6 @@ export default function Markdown({ text }: { text: string }) {
             <a {...props} target="_blank" rel="noreferrer">
               {children}
             </a>
-          ),
-          table: ({ children }) => (
-            <div className="table-wrap">
-              <table>{children}</table>
-            </div>
           ),
         }}
       >

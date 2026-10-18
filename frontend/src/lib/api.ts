@@ -48,8 +48,21 @@ export const api = {
   getSession: (id: string) => request<Session>(`sessions/${encodeURIComponent(id)}`),
   createSession: (title: string) =>
     request<Session>("sessions", { method: "POST", body: JSON.stringify({ title }) }),
+  renameSession: (id: string, title: string) =>
+    request<Session>(`sessions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
+  clearSession: (id: string) =>
+    request<Session>(`sessions/${encodeURIComponent(id)}/messages`, { method: "DELETE" }),
   deleteSession: (id: string) =>
     request<void>(`sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  deleteSessions: (ids: string[]) =>
+    request<{ deleted: number }>("sessions/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ session_ids: ids }),
+    }),
+  deleteAllSessions: () => request<{ deleted: number }>("sessions", { method: "DELETE" }),
   sendMessage: (id: string, message: string) =>
     request<SendMessageResult>(`sessions/${encodeURIComponent(id)}/messages`, {
       method: "POST",

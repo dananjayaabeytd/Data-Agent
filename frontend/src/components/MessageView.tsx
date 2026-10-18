@@ -1,9 +1,11 @@
 "use client";
 
+import { Bot, User } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 
-import type { ChatMessage } from "@/lib/api";
+import type { ChatMessage, Role } from "@/lib/api";
 import { usePrefersReducedMotion } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 import Markdown from "./Markdown";
 
 export type UiMessage = ChatMessage & {
@@ -16,6 +18,20 @@ interface Props {
   message: UiMessage;
   onRevealDone: (id: string) => void;
   onProgress: () => void;
+}
+
+export function Avatar({ role, className }: { role: Role; className?: string }) {
+  return (
+    <div
+      className={cn(
+        "grid size-8 shrink-0 place-items-center rounded-lg",
+        role === "user" ? "bg-secondary text-secondary-foreground" : "bg-primary/15 text-primary",
+        className,
+      )}
+    >
+      {role === "user" ? <User className="size-4" /> : <Bot className="size-4" />}
+    </div>
+  );
 }
 
 // Reveals text word by word, capped so long answers still finish quickly.
@@ -54,13 +70,15 @@ export default function MessageView({ message, onRevealDone, onProgress }: Props
   );
 
   return (
-    <article className={`message ${message.role}${message.animate ? " enter" : ""}`}>
-      <div className="avatar">{isUser ? "YOU" : "AI"}</div>
-      <div className="message-body">
-        <div className="message-role">{isUser ? "You" : "Data Agent"}</div>
-        <div className={`message-content${typing ? " typing" : ""}`}>
-          {isUser ? <p className="plain">{text}</p> : <Markdown text={text} />}
-        </div>
+    <article className={cn("mb-7 flex gap-3", message.animate && "animate-message-in")}>
+      <Avatar role={message.role} />
+      <div className="min-w-0 flex-1 wrap-anywhere">
+        <div className="mb-1 text-xs font-medium text-muted-foreground">{isUser ? "You" : "Data Agent"}</div>
+        {isUser ? (
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+        ) : (
+          <Markdown text={text} className={typing ? "typing-caret" : undefined} />
+        )}
       </div>
     </article>
   );

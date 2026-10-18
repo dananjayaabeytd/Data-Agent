@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+from collections.abc import Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
@@ -160,6 +161,32 @@ class PostgresSessionStore:
                 )
         return self.get(session_id, owner_id)
 
+    def rename(self, session_id: str, title: str, owner_id: str = "local") -> Session:
+        title = title.strip()
+        if not title:
+            raise ValueError("Session title cannot be empty")
+        with self._transaction() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE agent_sessions SET title = %s WHERE session_id = %s AND owner_id = %s",
+                (title, session_id, owner_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(f"Session not found: {session_id}")
+        return self.get(session_id, owner_id)
+
+    def clear(self, session_id: str, owner_id: str = "local") -> Session:
+        with self._transaction() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE agent_sessions SET updated_at = %s, messages_json = '[]'::jsonb
+                WHERE session_id = %s AND owner_id = %s
+                """,
+                (self._now(), session_id, owner_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(f"Session not found: {session_id}")
+        return self.get(session_id, owner_id)
+
     def delete(self, session_id: str, owner_id: str = "local") -> None:
         with self._transaction() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -168,3 +195,18 @@ class PostgresSessionStore:
             )
             if cursor.rowcount == 0:
                 raise KeyError(f"Session not found: {session_id}")
+
+    def delete_many(self, session_ids: Sequence[str], owner_id: str = "local") -> int:
+        if not session_ids:
+            return 0
+        with self._transaction() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM agent_sessions WHERE owner_id = %s AND session_id = ANY(%s)",
+                (owner_id, list(session_ids)),
+            )
+            return cursor.rowcount
+
+    def delete_all(self, owner_id: str = "local") -> int:
+        with self._transaction() as connection, connection.cursor() as cursor:
+            cursor.execute("DELETE FROM agent_sessions WHERE owner_id = %s", (owner_id,))
+            return cursor.rowcount
