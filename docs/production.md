@@ -14,14 +14,10 @@ Set `ETL_ALLOWED_HOSTS` to explicit trusted API hostnames. Do not leave it empty
 
 ## Database
 
-Run schema/data initialization as separate controlled jobs:
-
-```powershell
-.\.venv\Scripts\python.exe feed_db.py --reset
-.\.venv\Scripts\python.exe db\migrate.py
-```
-
-Do not run `--reset` against production data. Use versioned migrations for future schema changes.
+The API applies `db/migrations/*.sql` at startup (`DB_MIGRATE_ON_STARTUP`, default `true`).
+Migrations must be idempotent because every replica runs them on boot. Seed loading
+(`DB_SEED_ON_STARTUP`) defaults to `false` in production and only loads into empty tables.
+Add a new numbered file in `db/migrations/` for future schema changes.
 The analytics role must have `CONNECT`, schema `USAGE`, and `SELECT` on business tables only.
 It must not access `agent_sessions` or perform writes.
 

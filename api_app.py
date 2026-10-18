@@ -5,6 +5,7 @@ import re
 import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import jwt
@@ -16,11 +17,16 @@ from jwt import InvalidTokenError
 from pydantic import BaseModel, Field
 
 from agents.sql_analyst import database_config
-from main import ask_question
+from db.bootstrap import bootstrap_database
+from services.agent_service import ask_question
 from utils.database import DatabaseUtil
 from utils.session_store import create_session_store
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 LOGGER = logging.getLogger(__name__)
 API_KEY = os.getenv("DATA_AGENT_API_KEY")
 APP_ENV = os.getenv("APP_ENV", "development").lower()
@@ -30,10 +36,21 @@ JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "data-agent-api")
 USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 if APP_ENV == "production" and (not JWT_SECRET or len(JWT_SECRET) < 32):
     raise RuntimeError("Production requires JWT_SECRET with at least 32 characters")
-store = create_session_store()
+store = None  # created at startup, after migrations have run
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global store
+    bootstrap_database()
+    store = create_session_store()
+    yield
+
+
 app = FastAPI(
     title="Data Agent API",
     version="1.0.0",
+    lifespan=lifespan,
     docs_url=None if APP_ENV == "production" else "/docs",
     redoc_url=None if APP_ENV == "production" else "/redoc",
 )

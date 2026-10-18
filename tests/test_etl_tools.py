@@ -3,12 +3,12 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from main import build_request
+from db.bootstrap import MIGRATIONS_DIR, SEED_DIR, SEED_TABLES
 from Models.schema import TransformationPlan, TransformationStep
+from services.agent_service import build_request
 from utils.database import DatabaseUtil
 from utils.etl_tools import ETLTools
 from utils.session_store import SessionStore
-from web_app import STATIC_DIR, TEMPLATES_DIR
 
 
 class ETLToolsTests(unittest.TestCase):
@@ -67,20 +67,18 @@ class SessionStoreTests(unittest.TestCase):
                 store.get(session.session_id)
 
 
-class WebAssetTests(unittest.TestCase):
-    def test_template_and_response_rendering_hook_exist(self):
-        template = (TEMPLATES_DIR / "index.html").read_text(encoding="utf-8")
-        script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-
-        self.assertIn("/static/app.js", template)
-        self.assertIn("renderSession(result.session)", script)
-
-
 class DatabaseSafetyTests(unittest.TestCase):
     def test_rejects_multiple_statements_before_connection(self):
         result = DatabaseUtil({}).execute_sql("SELECT 1; SELECT 2")
         self.assertIn("multiple SQL statements", result)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class BootstrapTests(unittest.TestCase):
+    def test_seed_columns_match_csv_headers(self):
+        for table, columns in SEED_TABLES.items():
+            with open(SEED_DIR / f"{table}.csv", encoding="utf-8") as file:
+                self.assertEqual(file.readline().strip().split(","), columns, table)
+
+    def test_migrations_create_business_tables_before_sessions(self):
+        names = [path.name for path in sorted(MIGRATIONS_DIR.glob("*.sql"))]
+        self.assertEqual(names, ["001_business_schema.sql", "002_agent_sessions.sql"])

@@ -5,3 +5,5 @@ __pycache__
 .env
 .pytest_cache
 sessions.sqlite3
+frontend
+data/sessions.sqlite3*

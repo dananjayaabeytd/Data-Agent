@@ -32,8 +32,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     ports:
       - "8000:8000"
     read_only: true
@@ -44,20 +42,6 @@ services:
     cap_drop:
       - ALL
     command: ["uv", "run", "uvicorn", "api_app:app", "--host", "0.0.0.0", "--port", "8000"]
-
-  migrate:
-    build: .
-    container_name: data-agent-migrate
-    restart: "no"
-    env_file:
-      - .env
-    environment:
-      host: postgres
-      port: 5432
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: ["uv", "run", "python", "db/migrate.py"]
 
 volumes:
   postgres_data:

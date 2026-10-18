@@ -38,7 +38,7 @@ class DatabaseUtil:
                         SELECT table_name
                         FROM information_schema.tables
                         WHERE table_schema = %s
-                        AND table_name NOT LIKE 'agent_%'
+                        AND table_name NOT LIKE 'agent\\_%%'
                         ORDER BY table_name;
                         """,
                         (schema_name,),
@@ -96,7 +96,9 @@ class DatabaseUtil:
                     cursor.execute(query)
                     if cursor.description is None:
                         return "Statement produced no tabular result."
-                    return str(cursor.fetchmany(self.max_rows))
+                    columns = [column.name for column in cursor.description]
+                    rows = cursor.fetchmany(self.max_rows)
+                    return f"Columns: {columns}\nRows: {rows}"
         except psycopg2.Error as error:
             LOGGER.exception("SQL execution failed")
             return f"Error executing query: {error}"

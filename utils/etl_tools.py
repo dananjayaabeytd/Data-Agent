@@ -212,9 +212,3 @@ class ETLTools:
             return f"Data successfully transformed and saved to {output_file}"
         except (OSError, TypeError, ValueError, KeyError) as error:
             return f"Transformation failed: {error}"
-
-
-if __name__ == "__main__":
-    obj = ETLTools()
-    path = "C:\\Data_Agent\\data\\extract\\extracted_data.csv"
-    print(obj.transform_load_context(path))

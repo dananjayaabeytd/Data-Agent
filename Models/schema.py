@@ -74,9 +74,9 @@ class TransformationPlan(BaseModel):
 
 
 class RouterSchema(BaseModel):
-    answer: Literal["sql", "etl"] = Field(
+    answer: Literal["sql", "etl", "chat"] = Field(
         ...,
-        description="Indicates whether the user's question is related to SQL or ETL operations",
+        description="Indicates whether the user's request needs the SQL workflow, the ETL workflow, or a direct chat reply",
     )
     comments: str = Field(
         ...,
@@ -88,7 +88,7 @@ class DataAgentSchema(BaseModel):
     messages: Annotated[list, add] = Field(
         ..., description="List of messages to be processed by the Data agent"
     )
-    route_response: Literal["sql", "etl"] | None = Field(
+    route_response: Literal["sql", "etl", "chat"] | None = Field(
         default=None,
-        description="The response from the router indicating whether to route to SQL or ETL operations",
+        description="The response from the router indicating whether to route to SQL, ETL, or chat",
     )

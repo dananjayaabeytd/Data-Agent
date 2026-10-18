@@ -83,7 +83,3 @@ class ApiAppTests(unittest.TestCase):
             api_app.APP_ENV = original_environment
             api_app.JWT_SECRET = original_secret
             api_app.API_KEY = original_api_key
-
-
-if __name__ == "__main__":
-    unittest.main()

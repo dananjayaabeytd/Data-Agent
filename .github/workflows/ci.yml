@@ -15,6 +15,22 @@ jobs:
       - run: uv python install 3.12
       - run: uv sync --frozen
       - run: uv run python -m unittest discover -s tests -v
-      - run: uv run python -m compileall -q main.py api_app.py web_app.py feed_db.py agents Models utils tests
+      - run: uv run python -m compileall -q api_app.py agents db Models services utils tests
       - run: uv lock --check
       - run: docker build --check .
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build

@@ -1,7 +1,4 @@
 import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
@@ -34,7 +31,22 @@ def curate_ques(state: AgentSchema) -> AgentSchema:
 
     llm = pick_llm("low")
 
-    response = llm.invoke(f"Curate the folowing question : {user_question}").content
+    prompt = f"""
+    Rewrite the user's current request as one clear, standalone question about the database.
+    Rules:
+    - Do NOT answer the question and do NOT say whether data is available. Only rewrite it.
+    - Keep every number, filter, threshold, limit, date, and sort order exactly as asked
+      (for example "top 5", "at least 10 ratings", "in 2026").
+    - If conversation history is included, use it only to resolve follow-up references such
+      as "what about 2026?" or "those drivers". Ignore earlier questions that the current
+      request does not refer to.
+    - Return only the rewritten question, with no explanation.
+
+    User input:
+    {user_question}
+    """
+
+    response = llm.invoke(prompt).content
 
     return {
         "curated_question": response,
@@ -207,44 +219,3 @@ sql_agent_graph.add_edge("represent_final_answer", END)
 
 # Compile the Graph
 sql_analyst = sql_agent_graph.compile()
-
-if __name__ == "__main__":
-    # Optional
-    from IPython.display import Image
-
-    img = Image(sql_analyst.get_graph().draw_mermaid_png())
-    with open("sql_analyst_graph.png", "wb") as f:
-        f.write(img.data)
-
-    input_schema = {
-        "messages": [],
-        "user_question": "What are the different types of Payment Methods we have in our database",
-        "curated_ques": "",
-        "prompt_query_context": "",
-        "generated_sql_query": "",
-        "is_safe": "No",
-        "comments": "",
-        "sql_query_execution_result": "",
-        "final_answer": "",
-    }
-
-    # Execute the Graph
-    sql_analyst_response = sql_analyst.invoke(input_schema)
-    print(
-        sql_analyst_response["messages"]
-    )  # Print the final output of the graph execution
-    print("********************************")
-
-    print(sql_analyst_response["generated_sql_query"])  # Print the generated SQL query
-
-    print("********************************")
-
-    print(
-        sql_analyst_response["sql_query_execution_result"]
-    )  # Print the result of executing the SQL query
-
-    print("********************************")
-
-    print(
-        sql_analyst_response["prompt_query_context"]
-    )  # Print the prompt query context
