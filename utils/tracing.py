@@ -3,6 +3,8 @@ import os
 
 from langchain_core.runnables import RunnableConfig
 
+from utils.llm_pick import active_profile
+
 LOGGER = logging.getLogger(__name__)
 
 # Tag traces with the deployment environment unless it is set explicitly.
@@ -36,13 +38,14 @@ def agent_run_config(
 
     from langfuse.langchain import CallbackHandler
 
+    # Tag the model profile so traces and costs can be filtered per profile.
+    tags = [*(tags or []), f"models:{active_profile().name}"]
     metadata: dict = {}
     if session_id:
         metadata["langfuse_session_id"] = session_id
     if user_id:
         metadata["langfuse_user_id"] = user_id
-    if tags:
-        metadata["langfuse_tags"] = tags
+    metadata["langfuse_tags"] = tags
     config["callbacks"] = [CallbackHandler()]
     config["metadata"] = metadata
     return config

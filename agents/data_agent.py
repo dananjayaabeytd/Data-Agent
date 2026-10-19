@@ -97,6 +97,8 @@ def sql_node(state: DataAgentSchema):
         "messages": [final_message],
         "sql_query": response["generated_sql_query"],
         "sql_is_safe": response["is_safe"],
+        # LangGraph omits defaulted fields that no node wrote.
+        "sql_repairs": response.get("sql_repairs", 0),
     }
 
 

@@ -79,11 +79,19 @@ The SQL workflow uses a read-only database transaction. ETL paths must remain in
 
 ### Models
 
-Every step uses `gpt-5-nano` (OpenAI's cheapest model) with `reasoning_effort=minimal`, about
-$0.0002 per question across the five LLM calls. Set `LLM_MODEL` to change all steps, or
-`LLM_MODEL_LOW` / `LLM_MODEL_MEDIUM` / `LLM_MODEL_HIGH` to upgrade one tier. `medium` covers routing,
-SQL generation, and the safety judge, so it has the most effect on accuracy. Run the evaluation
-after any model change.
+Models are configured as named profiles in `config/models.yaml`. Each agent step asks for a
+level: `low` (question rewrite, final answer, chat), `medium` (routing, SQL generation and repair,
+safety judge, ETL planning), or `high` (unused for now).
+
+| Profile | Models | Golden-set execution accuracy | Use |
+|---|---|---|---|
+| `budget` (default) | gpt-5-nano everywhere | 84% | Development, about $0.0002 per question |
+| `quality` | gpt-5.6-luna / terra / sol | 96% | Demos |
+
+Switch by changing `active:` in the file or setting `MODEL_PROFILE=quality` in `.env`, then restart
+the API. The active profile is shown in `/health`, logged at startup, tagged on every Langfuse trace
+(`models:<profile>`), and recorded on each evaluation run. Unknown profiles, missing levels, and
+misspelled settings fail at startup.
 
 ### Tracing (Langfuse)
 

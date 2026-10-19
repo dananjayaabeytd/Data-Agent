@@ -20,6 +20,7 @@ from agents.sql_analyst import database_config
 from db.bootstrap import bootstrap_database
 from services.agent_service import ask_question
 from utils.database import DatabaseUtil
+from utils.llm_pick import active_profile
 from utils.session_store import create_session_store
 from utils.tracing import flush_tracing, tracing_enabled
 
@@ -46,6 +47,12 @@ async def lifespan(_app: FastAPI):
     bootstrap_database()
     database_config()  # fail fast in production if the SQL agent would use the owner role
     store = create_session_store()
+    profile = active_profile()
+    LOGGER.info(
+        "Model profile %s: %s",
+        profile.name,
+        ", ".join(f"{level}={settings.model}" for level, settings in profile.levels.items()),
+    )
     LOGGER.info("Langfuse tracing %s", "enabled" if tracing_enabled() else "disabled")
     yield
     flush_tracing()
@@ -166,7 +173,7 @@ def session_payload(session) -> dict:
 
 @app.get("/health", tags=["system"])
 def health() -> dict:
-    return {"status": "ok", "environment": APP_ENV}
+    return {"status": "ok", "environment": APP_ENV, "model_profile": active_profile().name}
 
 
 @app.get("/ready", tags=["system"])

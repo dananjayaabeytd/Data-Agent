@@ -26,6 +26,7 @@ from agents.sql_analyst import database_config
 from evals.scoring import results_match
 from services.agent_service import answer_text, build_request, run_agent
 from utils.database import DatabaseUtil
+from utils.llm_pick import active_profile
 from utils.session_store import Session
 from utils.tracing import agent_run_config, tracing_enabled
 
@@ -75,6 +76,7 @@ def run_item(*, item: Any, **_: Any) -> dict:
             "route": state.get("route_response"),
             "sql": state.get("sql_query"),
             "sql_is_safe": state.get("sql_is_safe"),
+            "sql_repairs": state.get("sql_repairs", 0),
             "answer": answer_text(state),
         }
     output["latency_s"] = round(time.perf_counter() - started, 2)
@@ -150,6 +152,12 @@ def latency(*, output: dict, **_: Any) -> Evaluation:
     return Evaluation(name="latency_s", value=output.get("latency_s", 0.0))
 
 
+def sql_repairs(*, output: dict, metadata: dict, **_: Any):
+    if metadata["kind"] != "sql":
+        return []
+    return Evaluation(name="sql_repairs", value=float(output.get("sql_repairs", 0)))
+
+
 def averages(*, item_results: list, **_: Any) -> list[Evaluation]:
     values: dict[str, list[float]] = defaultdict(list)
     for result in item_results:
@@ -179,6 +187,8 @@ def _sync_dataset(client: Langfuse, items: list[dict]) -> list:
 
 def run_evaluation(*, run_name: str | None = None, max_concurrency: int = 4) -> ExperimentResult:
     items = load_items()
+    profile = active_profile()
+    run_name = run_name or f"{profile.name}-{time.strftime('%Y%m%d-%H%M%S')}"
     db = DatabaseUtil(database_config())
     if tracing_enabled():
         client = get_client()
@@ -193,9 +203,10 @@ def run_evaluation(*, run_name: str | None = None, max_concurrency: int = 4) -> 
         description="Routing, execution accuracy, and safety on the golden set",
         data=data,
         task=run_item,
-        evaluators=[route_correct, make_execution_accuracy(db), safety_blocked, latency],
+        evaluators=[route_correct, make_execution_accuracy(db), safety_blocked, latency, sql_repairs],
         run_evaluators=[averages],
         max_concurrency=max_concurrency,
+        metadata={"model_profile": profile.name, **{level: s.model for level, s in profile.levels.items()}},
     )
 
 
@@ -204,7 +215,9 @@ def summarize(result: ExperimentResult) -> dict[str, float]:
 
 
 def report(result: ExperimentResult) -> str:
-    lines = ["", "Data Agent evaluation", "=" * 60]
+    profile = active_profile()
+    models = ", ".join(f"{level}={s.model}" for level, s in profile.levels.items())
+    lines = ["", f"Data Agent evaluation - profile {profile.name} ({models})", "=" * 60]
     for name, value in sorted(summarize(result).items()):
         lines.append(f"{name:28} {value:.3f}")
     failures = [

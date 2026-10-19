@@ -180,6 +180,32 @@ def execute_sql(state: AgentSchema) -> AgentSchema:
     return {"sql_query_execution_result": execution_result}
 
 
+def repair_sql(state: AgentSchema) -> AgentSchema:
+    """Ask the model to fix a query that the database rejected, using the exact error."""
+
+    llm = pick_llm("medium")
+
+    prompt = f"""
+    {state.prompt_query_context}
+
+    The previous SQL query failed when it was executed on PostgreSQL.
+
+    Failed query:
+    {state.generated_sql_query}
+
+    Database error:
+    {state.sql_query_execution_result}
+
+    Fix the query so it answers the user's question using only the tables and columns in the
+    schema above. Return only the corrected SQL query.
+    """
+
+    return {
+        "generated_sql_query": llm.invoke(prompt).content,
+        "sql_repairs": state.sql_repairs + 1,
+    }
+
+
 def represent_final_answer(state: AgentSchema) -> AgentSchema:
 
     execution_result = state.sql_query_execution_result
@@ -216,6 +242,7 @@ sql_agent_graph.add_node(generate_sql, name="generate_sql")
 sql_agent_graph.add_node(is_safe_sql, name="is_safe_sql")
 sql_agent_graph.add_node(canceled_sql, name="canceled_sql")
 sql_agent_graph.add_node(execute_sql, name="execute_sql")
+sql_agent_graph.add_node(repair_sql, name="repair_sql")
 sql_agent_graph.add_node(represent_final_answer, name="represent_final_answer")
 
 # Edges
@@ -243,11 +270,26 @@ sql_agent_graph.add_conditional_edges(
 )
 
 
-# sql_agent_graph.add_edge("is_safe_sql", "execute_sql")
-# sql_agent_graph.add_edge("is_safe_sql", "canceled_sql")
+MAX_SQL_REPAIRS = 2
+
+
+def needs_repair_edge(state: AgentSchema) -> str:
+    # Only database errors are repaired. Validator rejections ("Rejected: ...") are a safety
+    # decision, so they are never retried.
+    failed = state.sql_query_execution_result.startswith("Error executing query")
+    if failed and state.sql_repairs < MAX_SQL_REPAIRS:
+        return "repair_sql"
+    return "represent_final_answer"
+
 
 sql_agent_graph.add_edge("canceled_sql", END)
-sql_agent_graph.add_edge("execute_sql", "represent_final_answer")
+sql_agent_graph.add_conditional_edges(
+    "execute_sql",
+    needs_repair_edge,
+    {"repair_sql": "repair_sql", "represent_final_answer": "represent_final_answer"},
+)
+# A repaired query is judged again before it runs.
+sql_agent_graph.add_edge("repair_sql", "is_safe_sql")
 sql_agent_graph.add_edge("represent_final_answer", END)
 
 # Compile the Graph

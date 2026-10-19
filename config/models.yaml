@@ -1,0 +1,38 @@
+# Model profiles for the Data Agent.
+#
+# Each agent step asks for a level:
+#   low    - rewriting the question, writing the final answer, chat replies
+#   medium - routing, SQL generation and repair, the SQL safety judge, ETL planning
+#   high   - reserved for harder tasks (not used by the current graphs)
+#
+# Pick the profile with `active` below, or set MODEL_PROFILE in .env (it wins).
+# Restart the backend after switching: models are created when the API starts.
+# Run the evaluation after changing a profile to see its accuracy.
+
+active: budget
+
+profiles:
+  budget:
+    description: >-
+      Cheapest. gpt-5-nano for every step, about $0.0002 per question.
+      84% execution accuracy on the golden set.
+    defaults:
+      reasoning_effort: minimal # gpt-5 reasoning models reject temperature=0 and "none"
+    levels:
+      low: { model: gpt-5-nano }
+      medium: { model: gpt-5-nano }
+      high: { model: gpt-5-nano }
+
+  quality:
+    description: >-
+      The original setup, for demos. gpt-5.6 models, 96% execution accuracy on the
+      golden set, several times the cost of budget.
+    defaults:
+      reasoning_effort: none
+      temperature: 0
+    levels:
+      low: { model: gpt-5.6-luna }
+      medium: { model: gpt-5.6-terra }
+      high: { model: gpt-5.6-sol }
+
+# Each level also accepts timeout (seconds, default 60) and max_retries (default 2).
